@@ -27,18 +27,21 @@ export default function SignupPage() {
     try {
       setError('');
       setLoading(true);
-      await signup(email, password);
-      setSuccessMessage('Account created successfully! You can now log in.');
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
-    } catch (error: any) {
-      console.error('Signup error:', error);
-      if (error.message) {
-        setError(error.message);
+      console.log("Submitting signup form with email:", email);
+      
+      const result = await signup(email, password);
+      
+      if (result.success) {
+        setSuccessMessage(result.message);
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
       } else {
-        setError('Failed to create an account. Please try again.');
+        setError(result.message);
       }
+    } catch (error: any) {
+      console.error("Signup form error:", error);
+      setError(error.message || 'Failed to create account');
     } finally {
       setLoading(false);
     }
@@ -83,6 +86,7 @@ export default function SignupPage() {
                 placeholder="Email address"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
               />
             </div>
             <div>
@@ -97,6 +101,7 @@ export default function SignupPage() {
                 placeholder="Password (min 6 characters)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
               />
             </div>
             <div>
@@ -111,6 +116,7 @@ export default function SignupPage() {
                 placeholder="Confirm Password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={loading}
               />
             </div>
           </div>

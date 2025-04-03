@@ -13,25 +13,45 @@ function App() {
     <Router>
       <AuthProvider>
         <div className="min-h-screen bg-gray-100">
-          <Navbar />
           <Routes>
+            {/* Public routes - no loading state */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
-            <Route path="/" element={
-              <PrivateRoute>
-                <HomePage />
-              </PrivateRoute>
-            } />
-            <Route path="/scan" element={
-              <PrivateRoute>
-                <ScanReceiptPage />
-              </PrivateRoute>
-            } />
-            <Route path="/manual-entry" element={
-              <PrivateRoute>
-                <ManualEntryPage />
-              </PrivateRoute>
-            } />
+            
+            {/* Protected routes - with loading state */}
+            <Route 
+              path="/" 
+              element={
+                <PrivateRoute>
+                  <>
+                    <Navbar />
+                    <HomePage />
+                  </>
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/scan" 
+              element={
+                <PrivateRoute>
+                  <>
+                    <Navbar />
+                    <ScanReceiptPage />
+                  </>
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/manual-entry" 
+              element={
+                <PrivateRoute>
+                  <>
+                    <Navbar />
+                    <ManualEntryPage />
+                  </>
+                </PrivateRoute>
+              } 
+            />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </div>
