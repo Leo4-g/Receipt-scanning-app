@@ -1,9 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Camera, Upload, RefreshCw } from 'lucide-react';
 import { createWorker } from 'tesseract.js';
 import { supabase } from '../supabase';
+import { analyzeReceiptImage, extractReceiptInfo } from '../services/googleVision';
 
 export default function ScanReceiptPage() {
   const { currentUser } = useAuth();
@@ -25,8 +26,112 @@ export default function ScanReceiptPage() {
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Handle video element loaded metadata to ensure dimensions are set
+  const handleVideoMetadata = () => {
+    if (videoRef.current && canvasRef.current) {
+      // Set canvas size to match video dimensions
+      canvasRef.current.width = videoRef.current.videoWidth;
+      canvasRef.current.height = videoRef.current.videoHeight;
+      
+      // Force a redraw of the overlay
+      drawScanOverlay();
+    }
+  };
+
+  // Draw scan overlay on canvas
+  const drawScanOverlay = () => {
+    if (!canvasRef.current || !videoRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) return;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Get video dimensions
+    const videoWidth = videoRef.current.videoWidth || canvas.width;
+    const videoHeight = videoRef.current.videoHeight || canvas.height;
+    
+    // Ensure canvas matches video dimensions
+    canvas.width = videoWidth;
+    canvas.height = videoHeight;
+    
+    // Calculate document frame (80% of the smaller dimension)
+    const size = Math.min(videoWidth, videoHeight) * 0.8;
+    const x = (videoWidth - size) / 2;
+    const y = (videoHeight - size) / 2;
+    
+    // Draw semi-transparent overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, videoWidth, videoHeight);
+    
+    // Clear the document area
+    ctx.clearRect(x, y, size, size);
+    
+    // Draw document frame
+    ctx.strokeStyle = '#4f46e5';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, size, size);
+    
+    // Draw corner markers
+    const markerLength = size * 0.1;
+    ctx.beginPath();
+    
+    // Top-left corner
+    ctx.moveTo(x, y + markerLength);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x + markerLength, y);
+    
+    // Top-right corner
+    ctx.moveTo(x + size - markerLength, y);
+    ctx.lineTo(x + size, y);
+    ctx.lineTo(x + size, y + markerLength);
+    
+    // Bottom-right corner
+    ctx.moveTo(x + size, y + size - markerLength);
+    ctx.lineTo(x + size, y + size);
+    ctx.lineTo(x + size - markerLength, y + size);
+    
+    // Bottom-left corner
+    ctx.moveTo(x + markerLength, y + size);
+    ctx.lineTo(x, y + size);
+    ctx.lineTo(x, y + size - markerLength);
+    
+    ctx.stroke();
+    
+    // Add text guide
+    ctx.fillStyle = 'white';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Position receipt within frame', videoWidth / 2, y - 10);
+  };
+
+  // Animation loop for overlay
+  useEffect(() => {
+    let animationFrameId: number;
+    
+    if (cameraActive) {
+      const animate = () => {
+        drawScanOverlay();
+        animationFrameId = requestAnimationFrame(animate);
+      };
+      
+      animate();
+    }
+    
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [cameraActive]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -43,18 +148,60 @@ export default function ScanReceiptPage() {
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } 
-      });
+      setCameraError(null);
       
+      // First, check if camera permissions are available
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const hasCamera = devices.some(device => device.kind === 'videoinput');
+      
+      if (!hasCamera) {
+        throw new Error('No camera detected on this device');
+      }
+      
+      // Request camera access with explicit constraints
+      const constraints = { 
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
+      
+      console.log('Requesting camera with constraints:', constraints);
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      if (!stream) {
+        throw new Error('Failed to get camera stream');
+      }
+      
+      console.log('Camera stream obtained:', stream);
+      
+      // Store the stream reference
+      streamRef.current = stream;
+      
+      // Set the stream as the video source
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        streamRef.current = stream;
+        videoRef.current.onloadedmetadata = handleVideoMetadata;
+        
+        // Ensure video plays
+        try {
+          await videoRef.current.play();
+          console.log('Video playback started');
+        } catch (playError) {
+          console.error('Error playing video:', playError);
+          throw new Error('Could not start video playback');
+        }
+        
         setCameraActive(true);
+      } else {
+        throw new Error('Video element not available');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error accessing camera:', err);
-      alert('Could not access camera. Please check permissions.');
+      setCameraError(err.message || 'Could not access camera. Please check permissions.');
+      alert('Could not access camera: ' + (err.message || 'Please check permissions.'));
     }
   };
 
@@ -62,27 +209,59 @@ export default function ScanReceiptPage() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
-      setCameraActive(false);
     }
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    
+    setCameraActive(false);
   };
 
   const captureImage = () => {
-    if (videoRef.current) {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
       const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+      
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
       const ctx = canvas.getContext('2d');
       
       if (ctx) {
-        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const file = new File([blob], 'receipt-capture.jpg', { type: 'image/jpeg' });
-            setImage(file);
-            setPreview(canvas.toDataURL('image/jpeg'));
-            stopCamera();
-          }
-        }, 'image/jpeg');
+        // Calculate document frame (80% of the smaller dimension)
+        const size = Math.min(video.videoWidth, video.videoHeight) * 0.8;
+        const x = (video.videoWidth - size) / 2;
+        const y = (video.videoHeight - size) / 2;
+        
+        // First draw the full frame to see what we're capturing
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Create a new canvas for the cropped image
+        const croppedCanvas = document.createElement('canvas');
+        croppedCanvas.width = size;
+        croppedCanvas.height = size;
+        const croppedCtx = croppedCanvas.getContext('2d');
+        
+        if (croppedCtx) {
+          // Draw only the document area to the cropped canvas
+          croppedCtx.drawImage(
+            video, 
+            x, y, size, size,  // Source rectangle
+            0, 0, size, size   // Destination rectangle
+          );
+          
+          // Convert to blob and create a file
+          croppedCanvas.toBlob((blob) => {
+            if (blob) {
+              const file = new File([blob], 'receipt-capture.jpg', { type: 'image/jpeg' });
+              setImage(file);
+              setPreview(croppedCanvas.toDataURL('image/jpeg'));
+              stopCamera();
+            }
+          }, 'image/jpeg', 0.95);
+        }
       }
     }
   };
@@ -224,16 +403,33 @@ export default function ScanReceiptPage() {
             </div>
           ) : cameraActive ? (
             <div className="flex flex-col items-center">
-              <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline 
-                className="w-full max-h-96 object-contain mb-4 rounded-lg"
-              />
-              <div className="flex space-x-4">
+              <div className="relative w-full max-w-lg mx-auto">
+                <video 
+                  ref={videoRef} 
+                  autoPlay 
+                  playsInline 
+                  muted
+                  className="w-full h-auto object-contain rounded-lg bg-black"
+                  style={{ minHeight: '300px' }}
+                />
+                <canvas 
+                  ref={canvasRef}
+                  className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                />
+                {cameraError && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 rounded-lg">
+                    <div className="text-white text-center p-4">
+                      <p className="mb-2">Camera Error:</p>
+                      <p>{cameraError}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex space-x-4 mt-4">
                 <button
                   onClick={captureImage}
                   className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                  disabled={!!cameraError}
                 >
                   <Camera className="mr-2 h-5 w-5" />
                   Capture

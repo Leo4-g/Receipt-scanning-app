@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Receipt } from 'lucide-react';
@@ -7,45 +7,72 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
-  const { login, resetPassword } = useAuth();
+  
+  const { login, resetPassword, currentUser, loading } = useAuth();
   const navigate = useNavigate();
 
+  console.log("LoginPage render:", 
+    currentUser ? `User: ${currentUser.id}` : "No user", 
+    `Loading: ${loading}`,
+    `Submitting: ${isSubmitting}`
+  );
+
+  // Redirect if user is already logged in
+  useEffect(() => {
+    if (currentUser) {
+      console.log("User is logged in, navigating to home");
+      navigate('/');
+    }
+  }, [currentUser, navigate]);
+
+  // Handle login form submission
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
     try {
       setError('');
-      setLoading(true);
-      console.log("Submitting login form with email:", email);
+      setIsSubmitting(true);
+      console.log("Submitting login form");
       
       await login(email, password);
-      navigate('/');
+      // Navigation will happen in the useEffect when currentUser is set
     } catch (err: any) {
-      console.error('Login error:', err);
+      console.error("Login error in component:", err);
       setError(err.message || 'Failed to sign in');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   }
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
+  // Handle forgot password form submission
+  async function handleForgotPassword(e: React.FormEvent) {
     e.preventDefault();
     
     try {
       setError('');
-      setLoading(true);
+      setIsSubmitting(true);
       await resetPassword(resetEmail);
       setForgotPasswordVisible(false);
       alert('Password reset link sent to your email');
     } catch (err: any) {
       setError(err.message || 'Failed to send reset email');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
-  };
+  }
+
+  // Show loading spinner during initial auth check
+  if (loading && !isSubmitting) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+        <p className="ml-3 text-indigo-500">Checking authentication...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -54,7 +81,7 @@ export default function LoginPage() {
           <div className="flex justify-center">
             <Receipt className="h-12 w-12 text-indigo-600" />
           </div>
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">AccountPro</h2>
+          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">Kvitto AB</h2>
           <p className="mt-2 text-sm text-gray-600">
             Sign in to your business accounting app
           </p>
@@ -81,6 +108,7 @@ export default function LoginPage() {
                   placeholder="Email address"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={isSubmitting}
                 />
               </div>
               <div>
@@ -95,7 +123,7 @@ export default function LoginPage() {
                   placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  disabled={loading}
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -103,17 +131,28 @@ export default function LoginPage() {
             <div>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={isSubmitting}
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
               >
-                {loading ? 'Signing in...' : 'Sign in'}
+                {isSubmitting ? (
+                  <>
+                    <span className="animate-spin mr-2">⟳</span>
+                    Signing in...
+                  </>
+                ) : (
+                  'Sign in'
+                )}
               </button>
             </div>
             
             <div className="text-sm text-center">
-              <Link to="#" onClick={() => setForgotPasswordVisible(true)} className="font-medium text-indigo-600 hover:text-indigo-500">
+              <button 
+                type="button"
+                onClick={() => setForgotPasswordVisible(true)} 
+                className="font-medium text-indigo-600 hover:text-indigo-500"
+              >
                 Forgot your password?
-              </Link>
+              </button>
             </div>
             
             <div className="text-sm text-center">
@@ -139,24 +178,35 @@ export default function LoginPage() {
                 placeholder="Email address"
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
-                disabled={loading}
+                disabled={isSubmitting}
               />
             </div>
 
             <div>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={isSubmitting}
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
               >
-                {loading ? 'Sending reset link...' : 'Reset Password'}
+                {isSubmitting ? (
+                  <>
+                    <span className="animate-spin mr-2">⟳</span>
+                    Sending reset link...
+                  </>
+                ) : (
+                  'Reset Password'
+                )}
               </button>
             </div>
             
             <div className="text-sm text-center">
-              <Link to="#" onClick={() => setForgotPasswordVisible(false)} className="font-medium text-indigo-600 hover:text-indigo-500">
+              <button
+                type="button"
+                onClick={() => setForgotPasswordVisible(false)} 
+                className="font-medium text-indigo-600 hover:text-indigo-500"
+              >
                 Back to Login
-              </Link>
+              </button>
             </div>
           </form>
         )}

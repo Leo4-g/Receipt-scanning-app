@@ -24,7 +24,7 @@ export default function Navbar() {
           <div className="flex items-center">
             <Link to="/" className="flex items-center space-x-2">
               <Receipt className="h-6 w-6" />
-              <span className="font-bold text-xl">AccountPro</span>
+              <span className="font-bold text-xl">Kvitto AB</span>
             </Link>
           </div>
           
