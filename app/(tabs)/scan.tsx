@@ -1,10 +1,10 @@
 import { useState, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Image, ActivityIndicator, ScrollView, TextInput, Alert, Platform } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Image, ActivityIndicator, ScrollView, TextInput, Alert, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Camera, Upload, X, Check, CreditCard as Edit3 } from 'lucide-react-native';
+import { Camera, Upload, X, Check, CreditCard as Edit3, TrendingUp, TrendingDown } from 'lucide-react-native';
 import { useAuth } from '@/hooks/useAuth';
 import { processReceiptWithOCR, uploadDocument } from '@/services/documentService';
 
@@ -20,6 +20,39 @@ export default function ScanScreen() {
   const [vendor, setVendor] = useState('');
   const [category, setCategory] = useState('');
   const [notes, setNotes] = useState('');
+  const [transactionType, setTransactionType] = useState<'income' | 'expense' | null>(null);
+  const [showTypeSelection, setShowTypeSelection] = useState(false);
+
+  const selectTransactionType = (type: 'income' | 'expense') => {
+    setTransactionType(type);
+    setShowTypeSelection(false);
+    
+    // After selecting transaction type, proceed with image capture
+    if (type === 'income' || type === 'expense') {
+      showImageOptions();
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      "Upload Receipt",
+      "Choose an option",
+      [
+        {
+          text: "Take Photo",
+          onPress: takePhoto
+        },
+        {
+          text: "Choose from Gallery",
+          onPress: pickImage
+        },
+        {
+          text: "Cancel",
+          style: "cancel"
+        }
+      ]
+    );
+  };
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -113,6 +146,7 @@ export default function ScanScreen() {
     setVendor('');
     setCategory('');
     setNotes('');
+    setTransactionType(null);
   };
 
   const handleSubmit = async () => {
@@ -123,6 +157,11 @@ export default function ScanScreen() {
 
     if (!title || !amount) {
       Alert.alert('Missing Information', 'Please provide at least a title and amount');
+      return;
+    }
+
+    if (!transactionType) {
+      Alert.alert('Missing Information', 'Please select whether this is an income or expense');
       return;
     }
 
@@ -140,6 +179,7 @@ export default function ScanScreen() {
         userType: user?.userType,
         status: user?.userType === 'admin' || user?.userType === 'accountant' ? 'approved' : 'pending',
         imageUri: image,
+        transactionType,
       };
 
       await uploadDocument(documentData);
@@ -171,18 +211,10 @@ export default function ScanScreen() {
               <View style={styles.captureButtons}>
                 <TouchableOpacity 
                   style={[styles.captureButton, styles.primaryButton]} 
-                  onPress={takePhoto}
+                  onPress={() => setShowTypeSelection(true)}
                 >
                   <Camera size={20} color="#fff" />
-                  <Text style={styles.primaryButtonText}>Take Photo</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.captureButton, styles.secondaryButton]} 
-                  onPress={pickImage}
-                >
-                  <Upload size={20} color="#4361ee" />
-                  <Text style={styles.secondaryButtonText}>Upload</Text>
+                  <Text style={styles.primaryButtonText}>Capture Receipt</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -210,6 +242,42 @@ export default function ScanScreen() {
         {image && !processing && (
           <View style={styles.formContainer}>
             <Text style={styles.formTitle}>Receipt Details</Text>
+            
+            <View style={styles.transactionTypeContainer}>
+              <Text style={styles.label}>Transaction Type</Text>
+              <View style={styles.transactionTypeButtons}>
+                <TouchableOpacity
+                  style={[
+                    styles.transactionTypeButton,
+                    transactionType === 'income' && styles.transactionTypeButtonActive,
+                    { backgroundColor: transactionType === 'income' ? '#10b981' : '#f0f4ff' }
+                  ]}
+                  onPress={() => setTransactionType('income')}
+                >
+                  <TrendingUp size={20} color={transactionType === 'income' ? '#fff' : '#10b981'} />
+                  <Text style={[
+                    styles.transactionTypeText,
+                    { color: transactionType === 'income' ? '#fff' : '#10b981' }
+                  ]}>Income</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.transactionTypeButton,
+                    transactionType === 'expense' && styles.transactionTypeButtonActive,
+                    { backgroundColor: transactionType === 'expense' ? '#ef4444' : '#fff0f0' }
+                  ]}
+                  onPress={() => setTransactionType('expense')}
+                >
+                  <TrendingDown size={20} color={transactionType === 'expense' ? '#fff' : '#ef4444'} />
+                  <Text style={[
+                    styles.transactionTypeText,
+                    { color: transactionType === 'expense' ? '#fff' : '#ef4444' }
+                  ]}>Expense</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            
             {ocrResult && (
               <View style={styles.ocrResultContainer}>
                 <Text style={styles.ocrResultText}>
@@ -298,6 +366,46 @@ export default function ScanScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Transaction Type Selection Modal */}
+      <Modal
+        visible={showTypeSelection}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowTypeSelection(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Transaction Type</Text>
+            <Text style={styles.modalSubtitle}>Is this an income or expense?</Text>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.incomeButton]}
+                onPress={() => selectTransactionType('income')}
+              >
+                <TrendingUp size={24} color="#fff" />
+                <Text style={styles.modalButtonText}>Income</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.expenseButton]}
+                onPress={() => selectTransactionType('expense')}
+              >
+                <TrendingDown size={24} color="#fff" />
+                <Text style={styles.modalButtonText}>Expense</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={() => setShowTypeSelection(false)}
+            >
+              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -437,6 +545,30 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     marginBottom: 16,
   },
+  transactionTypeContainer: {
+    marginBottom: 16,
+  },
+  transactionTypeButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  transactionTypeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  transactionTypeButtonActive: {
+    borderWidth: 0,
+  },
+  transactionTypeText: {
+    fontFamily: 'Inter-Medium',
+    marginLeft: 8,
+  },
   ocrResultContainer: {
     backgroundColor: '#e6f7ef',
     padding: 12,
@@ -484,5 +616,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Inter-SemiBold',
     marginLeft: 8,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'Inter-Bold',
+    color: '#1a1a1a',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    fontFamily: 'Inter-Regular',
+    color: '#666',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 16,
+  },
+  modalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+    flex: 1,
+    marginHorizontal: 8,
+  },
+  incomeButton: {
+    backgroundColor: '#10b981',
+  },
+  expenseButton: {
+    backgroundColor: '#ef4444',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Inter-SemiBold',
+    marginLeft: 8,
+  },
+  modalCancelButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  modalCancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontFamily: 'Inter-Medium',
   },
 });

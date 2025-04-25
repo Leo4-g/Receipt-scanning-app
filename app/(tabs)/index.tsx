@@ -36,15 +36,15 @@ export default function HomeScreen() {
     return 'Good Evening';
   };
 
-  const navigateToAddReceipts = () => {
-    router.push('/(tabs)/add-receipts');
+  const navigateToScanReceipt = () => {
+    router.push('/(tabs)/scan');
   };
 
   // Add a prominent button at the top for easier access
   const AddReceiptsButton = () => (
     <TouchableOpacity 
       style={styles.prominentButton}
-      onPress={navigateToAddReceipts}
+      onPress={navigateToScanReceipt}
     >
       <Camera size={24} color="#fff" />
       <Text style={styles.prominentButtonText}>Add New Receipt</Text>
@@ -72,7 +72,7 @@ export default function HomeScreen() {
           <View style={styles.actionButtons}>
             <TouchableOpacity 
               style={[styles.actionButton, { width: screenWidth > 350 ? '30%' : '45%' }]}
-              onPress={navigateToAddReceipts}
+              onPress={navigateToScanReceipt}
             >
               <View style={styles.actionIconContainer}>
                 <Camera size={24} color="#4361ee" />
@@ -148,7 +148,7 @@ export default function HomeScreen() {
               <Text style={styles.emptyText}>No documents yet</Text>
               <TouchableOpacity 
                 style={styles.scanButton}
-                onPress={navigateToAddReceipts}
+                onPress={navigateToScanReceipt}
               >
                 <Plus size={20} color="#fff" />
                 <Text style={styles.scanButtonText}>Add New Receipt</Text>

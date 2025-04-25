@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Home, FileText, Camera, Receipt, User } from 'lucide-react-native';
+import { Home, FileText, Camera, User } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -46,17 +46,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="scan"
         options={{
-          title: 'Scan Document',
+          title: 'Scan Receipt',
           tabBarLabel: 'Scan',
           tabBarIcon: ({ color }) => <Camera size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="add-receipts"
-        options={{
-          title: 'Add Receipts',
-          tabBarLabel: 'Receipts',
-          tabBarIcon: ({ color }) => <Receipt size={22} color={color} />,
         }}
       />
       <Tabs.Screen
